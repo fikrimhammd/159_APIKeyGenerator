@@ -55,3 +55,52 @@ app.post('/create', (req, res) => {
   });
 });
 
+// === Endpoint untuk melihat semua API key ===
+app.get('/apikeys', (req, res) => {
+  db.query('SELECT * FROM apikeys', (err, results) => {
+    if (err) {
+      console.error('❌ Gagal mengambil data:', err);
+      return res.status(500).json({ success: false, message: 'Gagal mengambil data' });
+    }
+    res.json(results);
+  });
+});
+
+// === Endpoint untuk validasi API Key ===
+app.post('/validate', (req, res) => {
+  const { apiKey } = req.body;
+
+  if (!apiKey) {
+    return res.status(400).json({
+      success: false,
+      message: 'apiKey wajib diisi di body JSON'
+    });
+  }
+
+  const sql = 'SELECT * FROM apikeys WHERE api_key_value = ? AND is_active = 1 LIMIT 1';
+  db.query(sql, [apiKey], (err, results) => {
+    if (err) {
+      console.error('❌ Gagal cek API Key:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Kesalahan server saat validasi'
+      });
+    }
+
+    if (results.length > 0) {
+      res.json({
+        success: true,
+        valid: true,
+        message: 'API Key valid dan aktif',
+        data: results[0]
+      });
+    } else {
+      res.json({
+        success: false,
+        valid: false,
+        message: 'API Key tidak valid atau sudah nonaktif'
+      });
+    }
+  });
+});
+
