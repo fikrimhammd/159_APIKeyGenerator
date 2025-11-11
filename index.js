@@ -104,3 +104,58 @@ app.post('/validate', (req, res) => {
   });
 });
 
+// === Middleware untuk validasi otomatis API Key ===
+function checkApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key'];
+  if (!apiKey) {
+    return res.status(401).json({ success: false, message: 'API Key wajib di header (x-api-key)' });
+  }
+
+  const sql = 'SELECT * FROM apikeys WHERE api_key_value = ? AND is_active = 1 LIMIT 1';
+  db.query(sql, [apiKey], (err, results) => {
+    if (err) {
+      console.error('❌ Error validasi API key:', err);
+      return res.status(500).json({ success: false, message: 'Kesalahan server' });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({ success: false, message: 'API Key tidak valid atau nonaktif' });
+    }
+
+    req.apiKeyData = results[0];
+    next(); // lanjut ke endpoint berikutnya
+  });
+}
+
+// === Contoh endpoint rahasia yang butuh API Key ===
+app.get('/secret', checkApiKey, (req, res) => {
+  res.json({
+    success: true,
+    message: 'Berhasil akses endpoint rahasia!',
+    pemilik: req.apiKeyData
+  });
+});
+
+// === Endpoint untuk menonaktifkan API Key ===
+app.put('/apikeys/:id/deactivate', (req, res) => {
+  const { id } = req.params;
+  const sql = 'UPDATE apikeys SET is_active = 0 WHERE id = ?';
+
+  db.query(sql, [id], (err, result) => {
+    if (err) {
+      console.error('❌ Gagal menonaktifkan API Key:', err);
+      return res.status(500).json({ success: false, message: 'Gagal menonaktifkan API Key' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'API Key tidak ditemukan' });
+    }
+
+    res.json({ success: true, message: 'API Key berhasil dinonaktifkan' });
+  });
+});
+
+// === Jalankan server ===
+app.listen(port, () => {
+  console.log(`🚀 Server berjalan di http://localhost:${port}`);
+});
