@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin Login/Registrasi</title>
+    <style>
+        /* Global Reset & Typography */
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f9; color: #2d3748; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        
+        /* Container & Card */
+        .container { 
+            background-color: #ffffff; padding: 2.5rem; border-radius: 10px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); width: 90%; max-width: 450px; 
+            border-top: 4px solid #e53e3e; /* Aksen Merah untuk Login/Warning */
+        }
+
+        /* Headings & Text */
+        h2 { font-size: 1.6rem; font-weight: 700; border-bottom: 2px solid #edf2f7; padding-bottom: 10px; margin-bottom: 25px; color: #e53e3e; } /* Merah sebagai Aksen Login */
+        h2[style*="color: rgb(99, 179, 237)"] { color: #4299e1 !important; } /* Biru untuk Registrasi */
+        p { color: #718096; font-size: 0.85rem; }
+
+        /* Forms */
+        label { display: block; margin-bottom: 6px; font-weight: 600; color: #2d3748; font-size: 0.95rem; }
+        input { 
+            width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 6px; 
+            border: 1px solid #cbd5e0; background-color: #ffffff; color: #2d3748; 
+            box-sizing: border-box; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus { outline: none; border-color: #e53e3e; box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.2); }
+
+        /* Buttons */
+        button { 
+            width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; 
+            font-weight: 700; color: white; font-size: 1rem; transition: background-color 0.2s;
+        }
+        .btn-orange { background-color: #e53e3e; } /* Merah untuk tombol Login */
+        .btn-orange:hover { background-color: #c53030; }
+        .btn-blue { background-color: #4299e1; } /* Biru untuk tombol Register */
+        .btn-blue:hover { background-color: #3182ce; }
+
+        /* Messages */
+        .message { margin-top: 10px; padding: 12px; border-radius: 6px; display: none; font-size: 0.9rem; font-weight: 500; }
+        .success { background-color: #e6fffa; color: #38a169; display: block; border-left: 4px solid #48bb78; }
+        .error { background-color: #fff5f5; color: #e53e3e; display: block; border-left: 4px solid #f56565; }
+        
+        /* Links */
+        .nav-link, .reg-link a { display: block; text-align: center; color: #4299e1; text-decoration: none; margin-top: 20px; }
+        .nav-link:hover, .reg-link a:hover { text-decoration: underline; }
+        .reg-link { margin-top: 15px; text-align: center; font-size: 0.9rem; }
+        .admin-register-page { padding-top: 15px; border-top: 1px solid #edf2f7; margin-top: 25px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 id="formTitle" style="color: #e53e3e;">Panel Admin Login</h2>
+    <div id="adminMsg" class="message"></div>
+    
+    <div id="loginForm">
+        <label for="loginEmail">Email Admin</label>
+        <input type="email" id="loginEmail" placeholder="Masukkan email terdaftar">
+
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" placeholder="Masukkan password">
+
+        <button class="btn-orange" onclick="handleLogin()">Login ke Dashboard</button>
+        
+        <p class="reg-link">
+            Belum punya akun? <a href="#" onclick="toggleForm(true)">Daftar Admin Baru</a>
+        </p>
+    </div>
+
+    <div id="registerForm" style="display: none;">
+        <p style="color: #718096; font-size: 0.9rem; margin-top: -10px;">Registrasi Administrator Baru</p>
+
+        <label for="registerEmail">Email Admin</label>
+        <input type="email" id="registerEmail" placeholder="contoh@system.com">
+        
+        <label for="registerPassword">Password</label>
+        <input type="password" id="registerPassword" placeholder="Password rahasia">
+        
+        <button class="btn-blue" onclick="handleRegister()">Daftar Admin</button>
+
+        <p class="reg-link">
+            Sudah punya akun? <a href="#" onclick="toggleForm(false)">Login Admin</a>
+        </p>
+    </div>
+
+    <a href="/" class="nav-link">← Kembali ke Halaman Utama</a>
+</div>
+
+<script>
+    function showMsg(elId, text, isError = false) {
+        const el = document.getElementById(elId);
+        el.textContent = text;
+        el.className = isError ? 'message error' : 'message success';
+        el.style.display = 'block';
+        // Hapus pesan setelah 5 detik
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    // ==============================================
+    // FUNGSI TOGGLE FORM
+    // ==============================================
+    function toggleForm(isRegister) {
+        document.getElementById('loginForm').style.display = isRegister ? 'none' : 'block';
+        document.getElementById('registerForm').style.display = isRegister ? 'block' : 'none';
+        
+        const titleEl = document.getElementById('formTitle');
+        const msgEl = document.getElementById('adminMsg');
+
+        if (isRegister) {
+            titleEl.textContent = 'Panel Admin Registrasi';
+            titleEl.style.color = '#4299e1'; // Biru untuk Registrasi
+        } else {
+            titleEl.textContent = 'Panel Admin Login';
+            titleEl.style.color = '#e53e3e'; // Merah untuk Login
+        }
+
+        msgEl.style.display = 'none'; // Sembunyikan pesan saat beralih
+    }
+
+    // ==============================================
+    // FUNGSI HANDLE REGISTRASI
+    // ==============================================
+    async function handleRegister() {
+        const payload = {
+            email: document.getElementById('registerEmail').value,
+            password: document.getElementById('registerPassword').value
+        };
+
+        try {
+            const res = await fetch('/register/admin', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            
+            if(res.ok) {
+                showMsg('adminMsg', data.message);
+                document.getElementById('registerEmail').value = '';
+                document.getElementById('registerPassword').value = '';
+                // Setelah berhasil daftar, pindah ke halaman Login
+                setTimeout(() => toggleForm(false), 1000); 
+            } else {
+                showMsg('adminMsg', data.error || 'Registrasi gagal.', true);
+            }
+        } catch (e) {
+            showMsg('adminMsg', 'Error jaringan', true);
+        }
+    }
+
+    // ==============================================
+    // FUNGSI HANDLE LOGIN
+    // ==============================================
+    async function handleLogin() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        try {
+            const response = await fetch('/login/admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showMsg('adminMsg', data.message);
+                // Redirect ke Dashboard jika berhasil
+                setTimeout(() => window.location.href = data.redirect, 500);
+            } else {
+                showMsg('adminMsg', data.message || 'Login gagal.', true);
+            }
+        } catch (error) {
+            showMsg('adminMsg', 'Terjadi kesalahan jaringan atau server.', true);
+            console.error('Error:', error);
+        }
+    }
+    
+    // Inisialisasi: Pastikan form Login yang tampil pertama saat halaman dimuat
+    toggleForm(false);
+</script>
+
+</body>
+</html>

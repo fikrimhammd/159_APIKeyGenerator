@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; }
+        .dashboard-container { display: flex; min-height: 100vh; }
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; padding: 20px 0; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        .sidebar h2 { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #4a6279; padding-bottom: 15px; }
+        .menu-item { padding: 15px 20px; cursor: pointer; border-left: 5px solid transparent; transition: background-color 0.3s, border-left-color 0.3s; }
+        .menu-item:hover, .menu-item.active { background-color: #34495e; border-left-color: #3498db; }
+        .main-content { flex-grow: 1; padding: 40px; }
+        .content-section { display: none; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .content-section.active { display: block; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #3498db; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .logout-link { color: #e74c3c; text-decoration: none; padding: 15px 20px; display: block; margin-top: 50px; }
+        .logout-link:hover { background-color: #2c3e50; text-decoration: underline; }
+        .badge { padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+        .badge-green { background-color: #2ecc71; color: white; }
+        .badge-red { background-color: #e74c3c; color: white; }
+        
+        /* Gaya untuk Tombol Delete */
+        .btn-delete {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-delete:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="sidebar">
+        <h2>ADMIN PANEL</h2>
+        <div class="menu-item active" id="menu-users" data-target="users">Data User</div>
+        <div class="menu-item" id="menu-admins" data-target="admins">Data Admin</div>
+        <div class="menu-item" id="menu-keys" data-target="keys">API Keys</div>
+        <a href="/" class="logout-link" onclick="handleLogout(event)">← Logout / Home</a>
+    </div>
+
+    <div class="main-content">
+        
+        <div class="content-section active" id="users">
+            <h1>Daftar Pengguna (User)</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nama Depan</th>
+                        <th>Nama Belakang</th>
+                        <th>Email</th>
+                        <th>Terdaftar</th>
+                        <th>Aksi</th> </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    <tr><td colspan="6">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content-section" id="admins">
+            <h1>Daftar Administrator (Admin)</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Email Admin</th>
+                        <th>Terakhir Login</th>
+                        <th>Aksi</th> </tr>
+                </thead>
+                <tbody id="adminTableBody">
+                    <tr><td colspan="4">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content-section" id="keys">
+            <h1>Daftar API Keys</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>API Key Value</th>
+                        <th>Tanggal Kadaluwarsa</th>
+                        <th>Status</th>
+                        <th>Aksi</th> </tr>
+                </thead>
+                <tbody id="keyTableBody">
+                    <tr><td colspan="4">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // ==============================================
+    // FUNGSI UTILITY
+    // ==============================================
+
+    function formatDate(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('id-ID', {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+    
+    // ==============================================
+    // FUNGSI BARU: HANDLE DELETE
+    // ==============================================
+    async function handleDelete(type, idOrKey) {
+        const displayId = String(idOrKey).length > 20 ? String(idOrKey).substring(0, 15) + '...' : idOrKey;
+        if (!confirm(`Yakin ingin menghapus ${type} ini? (ID/Key: ${displayId})`)) {
+            return;
+        }
+
+        // Endpoint menggunakan ID atau KeyValue (untuk KeyValue perlu encode)
+        const endpoint = `/api/delete/${type}/${encodeURIComponent(idOrKey)}`;
+
+        try {
+            const res = await fetch(endpoint, { method: 'DELETE' });
+            const data = await res.json();
+
+            if (res.ok) {
+                alert(`Sukses: ${data.message}`);
+                // Refresh tabel yang relevan
+                if (type === 'user') loadUsers();
+                else if (type === 'admin') loadAdmins();
+                else if (type === 'key') loadKeys();
+            } else {
+                // 403 Forbidden atau 404 Not Found
+                alert(`Gagal: ${data.message || 'Terjadi kesalahan saat menghapus data.'}`);
+            }
+
+        } catch (e) {
+            alert('Error jaringan atau server.');
+            console.error(e);
+        }
+    }
+
+
+    // ==============================================
+    // FUNGSI LOAD DATA
+    // ==============================================
+
+    // 1. LOAD DATA USERS (Ditambahkan tombol Delete)
+    async function loadUsers() {
+        const tbody = document.getElementById('userTableBody');
+        tbody.innerHTML = '<tr><td colspan="6">Memuat data...</td></tr>';
+        
+        try {
+            const response = await fetch('/api/users');
+            if (response.status === 403) {
+                tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Sesi kedaluwarsa. Silakan Login Ulang.</td></tr>';
+                return;
+            }
+            const data = await response.json();
+            
+            tbody.innerHTML = ''; // Kosongkan
+            if (data.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="6">Tidak ada data user.</td></tr>';
+                 return;
+            }
+
+            data.forEach(user => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.first_name}</td>
+                        <td>${user.last_name || '-'}</td>
+                        <td>${user.email}</td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td><button class="btn-delete" onclick="handleDelete('user', ${user.id})">Hapus</button></td>
+                    </tr>`;
+            });
+
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Gagal memuat data pengguna. Cek server.</td></tr>';
+        }
+    }
+
+    // 2. LOAD DATA ADMINS (Ditambahkan tombol Delete)
+    async function loadAdmins() {
+        const tbody = document.getElementById('adminTableBody');
+        tbody.innerHTML = '<tr><td colspan="4">Memuat data...</td></tr>';
+
+        try {
+            const response = await fetch('/api/admins');
+            if (response.status === 403) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color:red;">Sesi kedaluwarsa. Silakan Login Ulang.</td></tr>';
+                return;
+            }
+            const data = await response.json();
+
+            tbody.innerHTML = ''; // Kosongkan
+            if (data.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="4">Tidak ada data admin.</td></tr>';
+                 return;
+            }
+
+            data.forEach(admin => {
+                // Protection: Tidak disarankan menghapus admin ID 1 atau admin yang sedang login
+                const buttonHtml = `<button class="btn-delete" onclick="handleDelete('admin', ${admin.id})">Hapus</button>`;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${admin.id}</td>
+                        <td>${admin.email}</td>
+                        <td>${formatDate(admin.last_login)}</td>
+                        <td>${buttonHtml}</td>
+                    </tr>`;
+            });
+        } catch (error) {
+            console.error('Error fetching admins:', error);
+            tbody.innerHTML = '<tr><td colspan="4" style="color:red;">Gagal memuat data admin. Cek server.</td></tr>';
+        }
+    }
+
+    // 3. LOAD DATA KEYS (Ditambahkan tombol Delete)
+    async function loadKeys() {
+        const tbody = document.getElementById('keyTableBody');
+        tbody.innerHTML = '<tr><td colspan="4">Memuat data...</td></tr>';
+        
+        try {
+            const response = await fetch('/api/keys');
+            if (response.status === 403) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color:red;">Sesi kedaluwarsa. Silakan Login Ulang.</td></tr>';
+                return;
+            }
+            const data = await response.json();
+            
+            tbody.innerHTML = ''; // Kosongkan
+            if (data.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="4">Tidak ada API Key.</td></tr>';
+                 return;
+            }
+
+            data.forEach(key => {
+                const expiryDate = new Date(key.out_of_date);
+                const now = new Date();
+                const isExpired = expiryDate < now;
+                const status = isExpired 
+                    ? '<span class="badge badge-red">Expired</span>' 
+                    : '<span class="badge badge-green">Active</span>';
+
+                // KeyValue penuh digunakan sebagai ID untuk hapus
+                const fullKey = key.KeyValue; 
+                const displayKey = fullKey.substring(0, 25) + '...';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-family: monospace;">${displayKey}</td>
+                        <td>${formatDate(key.out_of_date)}</td>
+                        <td>${status}</td>
+                        <td><button class="btn-delete" onclick="handleDelete('key', '${fullKey}')">Hapus</button></td>
+                    </tr>`;
+            });
+        } catch (error) {
+            console.error('Error fetching keys:', error);
+            tbody.innerHTML = '<tr><td colspan="4" style="color:red;">Gagal memuat API Key. Cek server.</td></tr>';
+        }
+    }
+    
+    // ==============================================
+    // FUNGSI NAVIGASI
+    // ==============================================
+    
+    function changeTab(targetId) {
+        document.querySelectorAll('.content-section').forEach(section => {
+            section.classList.remove('active');
+        });
+        document.getElementById(targetId).classList.add('active');
+        
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.getElementById(`menu-${targetId}`).classList.add('active');
+
+        // Memuat data saat tab diubah
+        if (targetId === 'users') loadUsers();
+        else if (targetId === 'admins') loadAdmins();
+        else if (targetId === 'keys') loadKeys();
+    }
+
+    function handleLogout(event) {
+        event.preventDefault();
+        // Karena logout di server NodeJS hanya dilakukan via POST/GET, 
+        // kita bisa arahkan user ke halaman /admin untuk login ulang
+        // atau kita buat endpoint logout spesifik jika diperlukan
+        window.location.href = '/admin'; 
+    }
+
+    // Tambahkan event listener untuk menu
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', function() {
+                changeTab(this.getAttribute('data-target'));
+            });
+        });
+
+        // Muat data user secara default
+        loadUsers();
+    });
+
+</script>
+</body>
+</html>

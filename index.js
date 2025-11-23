@@ -1,161 +1,254 @@
 const express = require('express');
 const path = require('path');
+const session = require('express-session');
 const crypto = require('crypto');
-const mysql = require('mysql2'); // <== penting!
+const mysql = require('mysql2');
 const app = express();
 const port = 3000;
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// === Koneksi ke database ===
+// ==========================================
+// 1. KONFIGURASI KONEKSI DATABASE
+// ==========================================
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'Kendari2023',
-  database: 'db_apikey',
-  port: 3309
+    host: 'localhost',
+    user: 'root',
+    port: 3309,               // Port MySQL Anda
+    password: 'Kendari2023', // Password Database Anda
+    database: 'db_apikey'        // Nama Database
 });
 
 db.connect((err) => {
-  if (err) {
-    console.error('❌ Gagal konek ke database:', err);
-  } else {
-    console.log('✅ Terhubung ke database MySQL');
-  }
-});
-
-// === Endpoint uji coba ===
-app.get('/test', (req, res) => {
-  res.send('Hello World!');
-});
-
-app.get('/status', (req, res) => {
-  res.json({ success: true });
-});
-
-// === Endpoint buat API Key dan simpan ke DB ===
-app.post('/create', (req, res) => {
-  const rawKey = 'sk-sm-v1' + crypto.randomBytes(24).toString('hex').toUpperCase();
-  const formattedKey = `API-${rawKey.slice(0, 8)}-${rawKey.slice(8, 16)}-${rawKey.slice(16, 24)}-${rawKey.slice(24, 32)}-${rawKey.slice(32, 40)}-${rawKey.slice(40, 48)}`;
-
-  const sql = 'INSERT INTO apikeys (api_key_value, is_active) VALUES (?, 1)';
-  db.query(sql, [formattedKey], (err, result) => {
     if (err) {
-      console.error('❌ Gagal menyimpan API Key:', err);
-      return res.status(500).json({ success: false, message: 'Gagal menyimpan ke database' });
+        console.error('Error connecting to MySQL:', err);
+        return;
     }
-
-    console.log('✅ API Key tersimpan dengan ID:', result.insertId);
-    res.json({
-      success: true,
-      apiKey: formattedKey,
-      id: result.insertId
-    });
-  });
+    console.log('Berhasil terhubung ke database MySQL (apikey).');
 });
 
-// === Endpoint untuk melihat semua API key ===
-app.get('/apikeys', (req, res) => {
-  db.query('SELECT * FROM apikeys', (err, results) => {
-    if (err) {
-      console.error('❌ Gagal mengambil data:', err);
-      return res.status(500).json({ success: false, message: 'Gagal mengambil data' });
-    }
-    res.json(results);
-  });
-});
 
-// === Endpoint untuk validasi API Key ===
-app.post('/validate', (req, res) => {
-  const { apiKey } = req.body;
 
-  if (!apiKey) {
-    return res.status(400).json({
-      success: false,
-      message: 'apiKey wajib diisi di body JSON'
-    });
-  }
+// ==========================================
+// 2. MIDDLEWARE & SETUP
+// ==========================================
+app.use(session({
+    secret: 'ganti_dengan_string_rahasia_anda_yang_panjang', // GANTI STRING INI
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false } 
+}));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-  const sql = 'SELECT * FROM apikeys WHERE api_key_value = ? AND is_active = 1 LIMIT 1';
-  db.query(sql, [apiKey], (err, results) => {
-    if (err) {
-      console.error('❌ Gagal cek API Key:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Kesalahan server saat validasi'
-      });
-    }
-
-    if (results.length > 0) {
-      res.json({
-        success: true,
-        valid: true,
-        message: 'API Key valid dan aktif',
-        data: results[0]
-      });
-    } else {
-      res.json({
-        success: false,
-        valid: false,
-        message: 'API Key tidak valid atau sudah nonaktif'
-      });
-    }
-  });
-});
-
-// === Middleware untuk validasi otomatis API Key ===
-function checkApiKey(req, res, next) {
-  const apiKey = req.headers['x-api-key'];
-  if (!apiKey) {
-    return res.status(401).json({ success: false, message: 'API Key wajib di header (x-api-key)' });
-  }
-
-  const sql = 'SELECT * FROM apikeys WHERE api_key_value = ? AND is_active = 1 LIMIT 1';
-  db.query(sql, [apiKey], (err, results) => {
-    if (err) {
-      console.error('❌ Error validasi API key:', err);
-      return res.status(500).json({ success: false, message: 'Kesalahan server' });
-    }
-
-    if (results.length === 0) {
-      return res.status(403).json({ success: false, message: 'API Key tidak valid atau nonaktif' });
-    }
-
-    req.apiKeyData = results[0];
-    next(); // lanjut ke endpoint berikutnya
-  });
+// --- INTEGRASI ROUTE ADMIN (DARI FILE TERPISAH) ---
+// Pastikan file 'routes/admin.js' sudah ada
+try {
+    const adminRoutes = require('./routes/admin')(db);
+    app.use('/', adminRoutes);
+} catch (error) {
+    console.error("Warning: File routes/admin.js tidak ditemukan atau error.", error.message);
 }
 
-// === Contoh endpoint rahasia yang butuh API Key ===
-app.get('/secret', checkApiKey, (req, res) => {
-  res.json({
-    success: true,
-    message: 'Berhasil akses endpoint rahasia!',
-    pemilik: req.apiKeyData
-  });
+
+// ==========================================
+// 3. ROUTE HALAMAN WEB (HTML)
+// ==========================================
+
+// Halaman Utama (User & API Key) -> http://localhost:3000/
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// === Endpoint untuk menonaktifkan API Key ===
-app.put('/apikeys/:id/deactivate', (req, res) => {
-  const { id } = req.params;
-  const sql = 'UPDATE apikeys SET is_active = 0 WHERE id = ?';
-
-  db.query(sql, [id], (err, result) => {
-    if (err) {
-      console.error('❌ Gagal menonaktifkan API Key:', err);
-      return res.status(500).json({ success: false, message: 'Gagal menonaktifkan API Key' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'API Key tidak ditemukan' });
-    }
-
-    res.json({ success: true, message: 'API Key berhasil dinonaktifkan' });
-  });
+// Halaman Registrasi Admin -> http://localhost:3000/admin
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// === Jalankan server ===
+// Halaman Dashboard Admin -> http://localhost:3000/dashboard
+// (BAGIAN INI YANG SEBELUMNYA KURANG)
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+
+// ==========================================
+// 4. API ENDPOINTS (POST - AKSI)
+// ==========================================
+
+// --- A. MEMBUAT API KEY BARU ---
+app.post('/create', (req, res) => {
+    try {
+        const randomBytes = crypto.randomBytes(32);
+        const token = randomBytes.toString('base64url');
+        const stamp = Date.now().toString();
+        let apiKey = 'sk-co-vi-' + `${token}_${stamp}`;
+
+        // Set kadaluwarsa 30 hari dari sekarang
+        const date = new Date();
+        date.setDate(date.getDate() + 30); 
+        const outOfDate = date.toISOString().slice(0, 19).replace('T', ' ');
+
+        const sqlQuery = 'INSERT INTO api_key (KeyValue, out_of_date) VALUES (?, ?)';
+
+        db.query(sqlQuery, [apiKey, outOfDate], (err, results) => {
+            if (err) {
+                console.error('Gagal menyimpan API key:', err);
+                return res.status(500).json({ error: 'Gagal menyimpan key di database' });
+            }
+            console.log(`Key baru: ${apiKey}, Expired: ${outOfDate}`);
+            res.status(200).json({ apiKey: apiKey });
+        });
+    } catch (error) {
+        console.error('Error crypto:', error);
+        res.status(500).json({ error: 'Gagal membuat API key' });
+    }
+});
+
+// --- B. CEK VALIDASI API KEY ---
+app.post('/check', (req, res) => {
+    const { apiKey } = req.body;
+
+    if (!apiKey) return res.status(400).json({ error: 'API key wajib diisi' });
+
+    const sqlQuery = 'SELECT * FROM api_key WHERE KeyValue = ?';
+
+    db.query(sqlQuery, [apiKey], (err, results) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Gagal memvalidasi key' });
+        }
+
+        if (results.length > 0) {
+            const expiryDate = new Date(results[0].out_of_date);
+            const now = new Date();
+
+            if (now > expiryDate) {
+                return res.status(401).json({ valid: false, message: 'API key sudah kedaluwarsa (expired)' });
+            }
+            res.status(200).json({ valid: true, message: 'API key valid dan aktif' });
+        } else {
+            res.status(401).json({ valid: false, message: 'API key tidak ditemukan' });
+        }
+    });
+});
+
+// --- C. REGISTRASI USER ---
+app.post('/register/user', (req, res) => {
+    const { first_name, last_name, email } = req.body;
+
+    if (!first_name || !email) {
+        return res.status(400).json({ error: 'Nama depan dan Email wajib diisi!' });
+    }
+
+    const sql = 'INSERT INTO user (first_name, last_name, email) VALUES (?, ?, ?)';
+    
+    db.query(sql, [first_name, last_name, email], (err, result) => {
+        if (err) {
+            console.error('Error User Register:', err);
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Email user sudah terdaftar!' });
+            }
+            return res.status(500).json({ error: 'Gagal mendaftarkan user.' });
+        }
+        res.status(200).json({ message: 'User berhasil didaftarkan!', userId: result.insertId });
+    });
+});
+
+
+// ==========================================
+// 5. API DATA UNTUK DASHBOARD (GET - DATA)
+// ==========================================
+// (BAGIAN INI YANG SEBELUMNYA KURANG)
+
+// Ambil Semua Data User
+app.get('/api/users', (req, res) => {
+    db.query('SELECT id, first_name, last_name, email, created_at FROM user ORDER BY id DESC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// Ambil Semua Data Admin
+app.get('/api/admins', (req, res) => {
+    db.query('SELECT id, email, last_login FROM admin ORDER BY id DESC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// Ambil Semua Data API Key
+app.get('/api/keys', (req, res) => {
+    db.query('SELECT KeyValue, out_of_date FROM api_key ORDER BY out_of_date DESC', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+const checkAdminSession = (req, res, next) => {
+    if (req.session.isAdmin) {
+        next();
+    } else {
+        res.status(403).json({ message: 'Akses Ditolak. Silakan login.' });
+    }
+};
+
+app.delete('/api/delete/user/:id', checkAdminSession, (req, res) => {
+    const userId = req.params.id;
+
+    db.query('DELETE FROM user WHERE id = ?', [userId], (err, result) => {
+        if (err) {
+            console.error('Error delete user:', err);
+            return res.status(500).json({ success: false, message: 'Gagal menghapus user.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
+        }
+        res.status(200).json({ success: true, message: 'User berhasil dihapus.' });
+    });
+});
+
+// --- E. DELETE ADMIN (/api/delete/admin/:id) ---
+app.delete('/api/delete/admin/:id', checkAdminSession, (req, res) => {
+    const adminId = req.params.id;
+
+    // Tambahkan pengaman: Admin tidak bisa menghapus dirinya sendiri (opsional tapi disarankan)
+    if (adminId == req.session.adminId) {
+        return res.status(403).json({ success: false, message: 'Anda tidak dapat menghapus akun Anda sendiri.' });
+    }
+
+    db.query('DELETE FROM admin WHERE id = ?', [adminId], (err, result) => {
+        if (err) {
+            console.error('Error delete admin:', err);
+            return res.status(500).json({ success: false, message: 'Gagal menghapus admin.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Admin tidak ditemukan.' });
+        }
+        res.status(200).json({ success: true, message: 'Admin berhasil dihapus.' });
+    });
+});
+
+// --- F. DELETE API KEY (/api/delete/key/:key) ---
+app.delete('/api/delete/key/:key', checkAdminSession, (req, res) => {
+    const key = req.params.key;
+
+    db.query('DELETE FROM api_key WHERE KeyValue = ?', [key], (err, result) => {
+        if (err) {
+            console.error('Error delete key:', err);
+            return res.status(500).json({ success: false, message: 'Gagal menghapus API Key.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'API Key tidak ditemukan.' });
+        }
+        res.status(200).json({ success: true, message: 'API Key berhasil dihapus.' });
+    });
+});
+
+// ==========================================
+// 6. JALANKAN SERVER
+// ==========================================
 app.listen(port, () => {
-  console.log(`🚀 Server berjalan di http://localhost:${port}`);
+    console.log(`Server berjalan di http://localhost:${port}`);
+    console.log(`Halaman Utama: http://localhost:${port}/`);
+    console.log(`Halaman Admin: http://localhost:${port}/admin`);
+    console.log(`Dashboard:     http://localhost:${port}/dashboard`);
 });
